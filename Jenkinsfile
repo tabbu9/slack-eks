@@ -2,23 +2,23 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USERNAME = "your-dockerhub-username"      // 🔸 Change this
-        IMAGE_NAME = "nginx-custom"                         // 🔸 Change if desired
-        IMAGE_TAG = "v${env.BUILD_NUMBER}"                  // Auto-incremented tag
-        CREDENTIALS_ID = "dockerhub-creds"                  // 🔸 Jenkins DockerHub creds
+        DOCKERHUB_USERNAME = "tabbu93"
+        DOCKERHUB_PASSWORD = "Jaheed9"
+        IMAGE_NAME = "nginx-custom"
+        TAG = "v${env.BUILD_NUMBER}"
     }
 
     stages {
-        stage('Clone Repo') {
+        stage('Clone GitHub Repo') {
             steps {
-                git url: 'https://github.com/your-username/your-nginx-repo.git', branch: 'main'
+                git url: 'https://github.com/tabbu9/slack-eks.git', branch: 'main'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
                     echo "Building image: ${fullImageName}"
                     sh "docker build -t ${fullImageName} ."
                 }
@@ -27,14 +27,12 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: "${CREDENTIALS_ID}", usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    script {
-                        def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
-                        sh """
-                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                            docker push ${fullImageName}
-                        """
-                    }
+                script {
+                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
+                    sh """
+                        echo "${DOCKERHUB_PASSWORD}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+                        docker push ${fullImageName}
+                    """
                 }
             }
         }
@@ -42,10 +40,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Docker image pushed: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "✅ Docker image pushed: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
         }
         failure {
-            echo "❌ Build failed."
+            echo "❌ Build failed. Check logs for more info."
         }
     }
 }
