@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKERHUB_USERNAME = "tabbu93"
-        DOCKERHUB_PASSWORD = "Jaheed9"
+        DOCKERHUB_PASSWORD = "SyedJaheed9"
         IMAGE_NAME = "nginx-custom"
         TAG = "v${env.BUILD_NUMBER}"
     }
