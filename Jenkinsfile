@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        DOCKERHUB_USERNAME = "syedquadri2007@gmail.com"
+        DOCKERHUB_USERNAME = "tabbu93"
         DOCKERHUB_PASSWORD = "Jaheed9"
         IMAGE_NAME = "nginx-custom"
         TAG = "v${env.BUILD_NUMBER}"
