@@ -5,13 +5,13 @@ pipeline {
         IMAGE_NAME = 'nginx-custom'
         BASE_VERSION_STR = '1.0'
         DOCKERHUB_USERNAME = "tabbu93"
-        DOCKERHUB_PASSWORD = "SyedJaheed@9"  // Hardcoded password (not recommended for production)
+        DOCKERHUB_PASSWORD = "SyedJaheed@9"  // ⚠️ Hardcoded password (use Jenkins credentials in production)
         GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
         EKS_CLUSTER_NAME = 'eks-slack'
         SLACK_CHANNEL = '#ci-cd-buildstatus'
-        SLACK_CRED_ID = 'slack'  // Slack token credential ID
+        SLACK_CRED_ID = 'slack'  // Jenkins credential ID for Slack
         KUBECONFIG = "/home/jenkins/.kube/config"
     }
 
@@ -57,8 +57,10 @@ pipeline {
 
         stage('Deploy to EKS') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([usernamePassword(credentialsId: 'aws_creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh """
+                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                         export AWS_DEFAULT_REGION=${AWS_REGION}
                         aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
                         kubectl apply -f deployment.yml
@@ -71,24 +73,20 @@ pipeline {
 
     post {
         success {
-            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
-                slackSend(
-                    channel: "${SLACK_CHANNEL}",
-                    color: 'good',
-                    message: "✅ *SUCCESS* | Build #${env.BUILD_NUMBER} pushed and deployed.",
-                    tokenCredentialId: SLACK_CRED_ID
-                )
-            }
+            slackSend(
+                channel: "${SLACK_CHANNEL}",
+                color: 'good',
+                message: "✅ *SUCCESS* | Build #${env.BUILD_NUMBER} pushed and deployed.",
+                tokenCredentialId: SLACK_CRED_ID
+            )
         }
         failure {
-            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
-                slackSend(
-                    channel: "${SLACK_CHANNEL}",
-                    color: 'danger',
-                    message: "❌ *FAILURE* | Build #${env.BUILD_NUMBER} failed. Check Jenkins logs.",
-                    tokenCredentialId: SLACK_CRED_ID
-                )
-            }
+            slackSend(
+                channel: "${SLACK_CHANNEL}",
+                color: 'danger',
+                message: "❌ *FAILURE* | Build #${env.BUILD_NUMBER} failed. Check Jenkins logs.",
+                tokenCredentialId: SLACK_CRED_ID
+            )
         }
     }
 }
