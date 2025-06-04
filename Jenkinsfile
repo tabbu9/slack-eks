@@ -5,7 +5,7 @@ pipeline {
         IMAGE_NAME = 'nginx-custom'
         BASE_VERSION_STR = '1.0'
         DOCKERHUB_USERNAME = "tabbu93"
-        DOCKERHUB_PASSWORD = "SyedJaheed@9"  // Use Jenkins credentials ID
+        DOCKERHUB_PASSWORD = "SyedJaheed@9"  // Hardcoded password (not recommended for production)
         GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
@@ -44,15 +44,13 @@ pipeline {
 
         stage('Push to Docker Hub') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-                    script {
-                        def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${env.TAG}"
-                        sh """
-                            echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
-                            docker push ${fullImageName}
-                            docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest
-                        """
-                    }
+                script {
+                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${env.TAG}"
+                    sh """
+                        echo "${DOCKERHUB_PASSWORD}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+                        docker push ${fullImageName}
+                        docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest
+                    """
                 }
             }
         }
