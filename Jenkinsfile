@@ -5,14 +5,14 @@ pipeline {
         IMAGE_NAME = 'nginx-custom'
         BASE_VERSION_STR = '1.0'
         DOCKERHUB_USERNAME = "tabbu93"
-        DOCKERHUB_PASSWORD = "SyedJaheed@9"  // ⚠️ Still hardcoded
+        DOCKERHUB_PASSWORD = "SyedJaheed@9" // NOTE: Hardcoded - not safe for production!
         GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
         EKS_CLUSTER_NAME = 'eks-slack'
         SLACK_CHANNEL = '#ci-cd-buildstatus'
         SLACK_CRED_ID = 'slack'
-        KUBECONFIG_PATH = "${WORKSPACE}/.kube/config"  // 🔧 use a local writable path
+        KUBECONFIG = "/home/jenkins/.kube/config"
     }
 
     stages {
@@ -57,18 +57,20 @@ pipeline {
 
         stage('Deploy to EKS') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'aws_creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     script {
-                        sh """
+                        sh '''
                             export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                             export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            export AWS_DEFAULT_REGION=${AWS_REGION}
-                            mkdir -p $(dirname ${KUBECONFIG_PATH})
-                            aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME} --kubeconfig ${KUBECONFIG_PATH}
-                            export KUBECONFIG=${KUBECONFIG_PATH}
+                            export AWS_DEFAULT_REGION="${AWS_REGION}"
+
+                            mkdir -p ~/.kube
+                            aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}" --kubeconfig ~/.kube/config
+
+                            export KUBECONFIG=~/.kube/config
                             kubectl apply -f deployment.yml
                             kubectl rollout status deployment/project04-deployment --timeout=60s
-                        """
+                        '''
                     }
                 }
             }
@@ -77,20 +79,24 @@ pipeline {
 
     post {
         success {
-            slackSend(
-                channel: "${SLACK_CHANNEL}",
-                color: 'good',
-                message: "✅ *SUCCESS* | Build #${env.BUILD_NUMBER} pushed and deployed.",
-                tokenCredentialId: SLACK_CRED_ID
-            )
+            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
+                slackSend(
+                    channel: "${SLACK_CHANNEL}",
+                    color: 'good',
+                    message: "✅ *SUCCESS* | Build #${env.BUILD_NUMBER} pushed and deployed.",
+                    tokenCredentialId: SLACK_CRED_ID
+                )
+            }
         }
         failure {
-            slackSend(
-                channel: "${SLACK_CHANNEL}",
-                color: 'danger',
-                message: "❌ *FAILURE* | Build #${env.BUILD_NUMBER} failed. Check Jenkins logs.",
-                tokenCredentialId: SLACK_CRED_ID
-            )
+            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
+                slackSend(
+                    channel: "${SLACK_CHANNEL}",
+                    color: 'danger',
+                    message: "❌ *FAILURE* | Build #${env.BUILD_NUMBER} failed. Check Jenkins logs.",
+                    tokenCredentialId: SLACK_CRED_ID
+                )
+            }
         }
     }
 }
