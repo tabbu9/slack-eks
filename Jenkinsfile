@@ -69,7 +69,7 @@ pipeline {
 
                             export KUBECONFIG=~/.kube/config
                             kubectl apply -f deployment.yaml
-                            kubectl rollout status deployment/project04-deployment --timeout=60s
+                            kubectl rollout status deployment/nginx-deployment --timeout=60s
                         '''
                     }
                 }
