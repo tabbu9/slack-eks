@@ -5,7 +5,7 @@ pipeline {
         IMAGE_NAME = 'nginx-custom'
         BASE_VERSION_STR = '1.0'
         DOCKERHUB_USERNAME = "tabbu93"
-        DOCKERHUB_PASSWORD = credentials('dockerhub-pass')  // Use Jenkins credentials ID
+        DOCKERHUB_PASSWORD = "SyedJaheed@9"  // Use Jenkins credentials ID
         GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
