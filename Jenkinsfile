@@ -68,7 +68,7 @@ pipeline {
                             aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}" --kubeconfig ~/.kube/config
 
                             export KUBECONFIG=~/.kube/config
-                            kubectl apply -f deployment.yml
+                            kubectl apply -f deployment.yaml
                             kubectl rollout status deployment/project04-deployment --timeout=60s
                         '''
                     }
