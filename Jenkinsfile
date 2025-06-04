@@ -16,50 +16,45 @@ pipeline {
     }
 
     stages {
-        stage('Set version tag') {
+        stage('Clone GitHub Repo') {
             steps {
-                script {
-                    env.VERSION_TAG = "v${BASE_VERSION_STR}-${env.BUILD_NUMBER}"
-                    echo "VERSION_TAG set to: ${env.VERSION_TAG}"
-                }
-            }
-        }
-
-        stage('Checkout') {
-            steps {
-                git url: "${env.GIT_REPO_URL}", branch: "${env.GIT_BRANCH}"
-            }
-        }
-
-        stage('Clean old images') {
-            steps {
-                sh 'docker images -q | xargs -r docker rmi -f || true'
+                git url: 'https://github.com/tabbu9/slack-eks.git', branch: 'main'
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    def image = docker.build("${IMAGE_NAME}:${env.VERSION_TAG}")
-                    sh "docker tag ${IMAGE_NAME}:${env.VERSION_TAG} ${IMAGE_NAME}:latest"
+                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
+                    echo "Building image: ${fullImageName}"
+                    sh "docker build -t ${fullImageName} ."
                 }
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Push to Docker Hub') {
             steps {
-                withCredentials([string(credentialsId: DOCKERHUB_CRED, variable: 'DOCKER_PASSWORD')]) {
-                    sh 'echo $DOCKER_PASSWORD | docker login -u 1sharathchandra --password-stdin'
+                script {
+                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
+                    sh """
+                        echo "${DOCKERHUB_PASSWORD}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
+                        docker push ${fullImageName}
+                    """
                 }
-                sh """
-                    docker push ${IMAGE_NAME}:${env.VERSION_TAG}
-                    docker push ${IMAGE_NAME}:latest
-                """
-                sh 'docker images -q | xargs -r docker rmi -f || true'
             }
         }
+    }
 
-        stage('Deploy to EKS') {
+    post {
+        success {
+            echo "✅ Docker image pushed: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
+        }
+        failure {
+            echo "❌ Build failed. Check logs for more info."
+        }
+    }
+}
+stage('Deploy to EKS') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh '''
@@ -70,30 +65,3 @@ pipeline {
                     '''
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            withCredentials([string(credentialsId: env.SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
-                slackSend(
-                    channel: "${SLACK_CHANNEL}",
-                    color: 'good',
-                    message: "✅ *SUCCESS* | Project04 - Build #${env.BUILD_NUMBER} completed successfully.",
-                    tokenCredentialId: env.SLACK_CRED_ID
-                )
-            }
-        }
-
-        failure {
-            withCredentials([string(credentialsId: env.SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
-                slackSend(
-                    channel: "${SLACK_CHANNEL}",
-                    color: 'danger',
-                    message: "❌ *FAILURE* | Project04 - Build #${env.BUILD_NUMBER} failed. Check Jenkins for details.",
-                    tokenCredentialId: env.SLACK_CRED_ID
-                )
-            }
-        }
-    }
-}
