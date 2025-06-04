@@ -5,40 +5,66 @@ pipeline {
         IMAGE_NAME = 'nginx-custom'
         BASE_VERSION_STR = '1.0'
         DOCKERHUB_USERNAME = "tabbu93"
-        DOCKERHUB_PASSWORD = "SyedJaheed@9"
+        DOCKERHUB_PASSWORD = credentials('dockerhub-pass')  // Use Jenkins credentials ID
         GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
         EKS_CLUSTER_NAME = 'eks-slack'
         SLACK_CHANNEL = '#ci-cd-buildstatus'
-        SLACK_CRED_ID = 'slack'   // <-- Slack token credential ID here
+        SLACK_CRED_ID = 'slack'  // Slack token credential ID
         KUBECONFIG = "/home/jenkins/.kube/config"
     }
 
     stages {
+        stage('Set version tag') {
+            steps {
+                script {
+                    env.TAG = "v${BASE_VERSION_STR}-${env.BUILD_NUMBER}"
+                    echo "TAG set to: ${env.TAG}"
+                }
+            }
+        }
+
         stage('Clone GitHub Repo') {
             steps {
-                git url: 'https://github.com/tabbu9/slack-eks.git', branch: 'main'
+                git url: "${GIT_REPO_URL}", branch: "${GIT_BRANCH}"
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
+                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${env.TAG}"
                     echo "Building image: ${fullImageName}"
                     sh "docker build -t ${fullImageName} ."
+                    sh "docker tag ${fullImageName} ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest"
                 }
             }
         }
 
         stage('Push to Docker Hub') {
             steps {
-                script {
-                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
+                    script {
+                        def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${env.TAG}"
+                        sh """
+                            echo "$DOCKERHUB_PASSWORD" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+                            docker push ${fullImageName}
+                            docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Deploy to EKS') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh """
-                        echo "${DOCKERHUB_PASSWORD}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-                        docker push ${fullImageName}
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                        kubectl apply -f deployment.yml
+                        kubectl rollout status deployment/project04-deployment --timeout=60s
                     """
                 }
             }
@@ -47,22 +73,24 @@ pipeline {
 
     post {
         success {
-            echo "✅ Docker image pushed: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${TAG}"
+            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
+                slackSend(
+                    channel: "${SLACK_CHANNEL}",
+                    color: 'good',
+                    message: "✅ *SUCCESS* | Build #${env.BUILD_NUMBER} pushed and deployed.",
+                    tokenCredentialId: SLACK_CRED_ID
+                )
+            }
         }
         failure {
-            echo "❌ Build failed. Check logs for more info."
+            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
+                slackSend(
+                    channel: "${SLACK_CHANNEL}",
+                    color: 'danger',
+                    message: "❌ *FAILURE* | Build #${env.BUILD_NUMBER} failed. Check Jenkins logs.",
+                    tokenCredentialId: SLACK_CRED_ID
+                )
+            }
         }
     }
-}
-stage('Deploy to EKS') {
-            steps {
-                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh '''
-                        export AWS_DEFAULT_REGION=${AWS_REGION}
-                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
-                        kubectl apply -f deployment.yml
-                        kubectl rollout status deployment/project04-deployment --timeout=60s
-                    '''
-                }
-            }
 }
