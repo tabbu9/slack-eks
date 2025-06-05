@@ -9,7 +9,7 @@ pipeline {
         GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
-        EKS_CLUSTER_NAME = 'eks-slack'
+        EKS_CLUSTER_NAME = 'eks-cluster'
         SLACK_CHANNEL = '#ci-cd-buildstatus'
         SLACK_CRED_ID = 'slack'
         KUBECONFIG = "/home/jenkins/.kube/config"
