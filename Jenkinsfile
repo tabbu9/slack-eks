@@ -23,7 +23,7 @@ pipeline {
             steps {
                 script {
                     def latestTag = sh(
-                        script: 'curl -s https://hub.docker.com/v2/repositories/harishgorla5/project4/tags | jq -r \'.results | map(select(.name | test("^v[0-9]+\\\\.[0-9]+$"))) | sort_by(.name) | last | .name\' || echo "v4.0"',
+                        script: 'curl -s https://hub.docker.com/v2/repositories/tabbu93/project04/tags | jq -r \'.results | map(select(.name | test("^v[0-9]+\\\\.[0-9]+$"))) | sort_by(.name) | last | .name\' || echo "v4.0"',
                         returnStdout: true
                     ).trim()
  
@@ -75,7 +75,7 @@ pipeline {
                     sh '''
                         export AWS_DEFAULT_REGION=${AWS_REGION}
                         aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
-                        kubectl apply -f deployment.yaml
+                        kubectl apply -f project04.yaml
                         kubectl rollout status deployment/project04-deployment --timeout=60s
                     '''
                 }
