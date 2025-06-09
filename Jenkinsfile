@@ -1,101 +1,114 @@
 pipeline {
     agent any
-
+ 
     environment {
-        IMAGE_NAME = 'nginx-custom'
-        BASE_VERSION_STR = '1.0'
-        DOCKERHUB_USERNAME = "tabbu93"
-        DOCKERHUB_PASSWORD = "SyedJaheed@9" // NOTE: Hardcoded - not safe for production!
-        GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'
+        DOCKER_CREDENTIALS_ID = 'project04'  
+        GIT_REPO_URL = 'https://github.com/tabbu9/slack-eks.git'  
+        DOCKER_IMAGE_NAME = 'tabbu93/project04'
+        SLACK_CHANNEL = '#ci-cd-buildstatus'
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
-        EKS_CLUSTER_NAME = 'eks-cluster'
-        SLACK_CHANNEL = '#ci-cd-buildstatus'
-        SLACK_CRED_ID = 'slack'
-        KUBECONFIG = "/home/jenkins/.kube/config"
+        SLACK_CREDENTIALS_ID = 'slack'
+        EKS_CLUSTER_NAME = 'batch071-eks'
     }
-
+ 
     stages {
-        stage('Set version tag') {
+        stage('Clone GitHub Repository') {
             steps {
-                script {
-                    env.TAG = "v${BASE_VERSION_STR}-${env.BUILD_NUMBER}"
-                    echo "TAG set to: ${env.TAG}"
-                }
+                git url: "${GIT_REPO_URL}", branch: 'project04'
             }
         }
-
-        stage('Clone GitHub Repo') {
-            steps {
-                git url: "${GIT_REPO_URL}", branch: "${GIT_BRANCH}"
-            }
-        }
-
-        stage('Build Docker Image') {
+ 
+        stage('Build and Prepare Docker Image') {
             steps {
                 script {
-                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${env.TAG}"
-                    echo "Building image: ${fullImageName}"
-                    sh "docker build -t ${fullImageName} ."
-                    sh "docker tag ${fullImageName} ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest"
-                }
-            }
-        }
-
-        stage('Push to Docker Hub') {
-            steps {
-                script {
-                    def fullImageName = "${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${env.TAG}"
+                    def latestTag = sh(
+                        script: 'curl -s https://hub.docker.com/v2/repositories/harishgorla5/project4/tags | jq -r \'.results | map(select(.name | test("^v[0-9]+\\\\.[0-9]+$"))) | sort_by(.name) | last | .name\' || echo "v4.0"',
+                        returnStdout: true
+                    ).trim()
+ 
+                    if (latestTag == "null" || !latestTag.startsWith("v")) {
+                        latestTag = "v4.0"
+                    }
+ 
+                    def versionParts = latestTag.substring(1).split('\\.')
+                    def major = versionParts[0].toInteger()
+                    def minor = versionParts[1].toInteger() + 1
+                    env.IMAGE_VERSION = "v${major}.${minor}"
+ 
+                    echo "New Docker Image Version: ${env.IMAGE_VERSION}"
+ 
+                    withCredentials([string(credentialsId: DOCKER_CREDENTIALS_ID, variable: 'DOCKER_TOKEN')]) {
+                        sh 'echo "$DOCKER_TOKEN" | docker login -u "harishgorla5" --password-stdin'
+                    }
+ 
+                    sh 'docker pull nginx:latest'
+ 
+                    if (fileExists('index.html')) {
+                        writeFile file: 'Dockerfile', text: '''
+                        FROM nginx:latest
+                        COPY index.html /usr/share/nginx/html/index.html
+                        '''
+                    } else {
+                        error "index.html file is missing!"
+                    }
+ 
                     sh """
-                        echo "${DOCKERHUB_PASSWORD}" | docker login -u "${DOCKERHUB_USERNAME}" --password-stdin
-                        docker push ${fullImageName}
-                        docker push ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:latest
+                        docker build -t ${DOCKER_IMAGE_NAME}:${IMAGE_VERSION} -t ${DOCKER_IMAGE_NAME}:latest .
                     """
                 }
             }
         }
-
+ 
+        stage('Push Updated Image to Docker Hub') {
+            steps {
+                script {
+                    sh "docker push ${DOCKER_IMAGE_NAME}:${IMAGE_VERSION}"
+                    sh "docker push ${DOCKER_IMAGE_NAME}:latest"
+                }
+            }
+        }
+        
         stage('Deploy to EKS') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'aws_creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    script {
-                        sh '''
-                            export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                            export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                            export AWS_DEFAULT_REGION="${AWS_REGION}"
-
-                            mkdir -p ~/.kube
-                            aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}" --kubeconfig ~/.kube/config
-
-                            export KUBECONFIG=~/.kube/config
-                            kubectl apply -f deployment.yaml
-                            kubectl rollout status deployment/nginx-deployment --timeout=60s
-                        '''
-                    }
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh '''
+                        export AWS_DEFAULT_REGION=${AWS_REGION}
+                        aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME}
+                        kubectl apply -f deployment.yaml
+                        kubectl rollout status deployment/project04-deployment --timeout=60s
+                    '''
                 }
             }
         }
     }
-
+ 
     post {
         success {
-            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
+            script {
                 slackSend(
                     channel: "${SLACK_CHANNEL}",
-                    color: 'good',
-                    message: "✅ *SUCCESS* | Build #${env.BUILD_NUMBER} pushed and deployed.",
-                    tokenCredentialId: SLACK_CRED_ID
+                    color: "good",
+                    credentialsId: "${SLACK_CREDENTIALS_ID}",
+                    message: "✅ *SUCCESS*: Jenkins Build Completed! 🎉\n*Project:* Project04\n*Version:* ${IMAGE_VERSION}\n*Docker Image:* ${DOCKER_IMAGE_NAME}:latest"
                 )
             }
         }
         failure {
-            withCredentials([string(credentialsId: SLACK_CRED_ID, variable: 'SLACK_TOKEN')]) {
+            script {
                 slackSend(
                     channel: "${SLACK_CHANNEL}",
-                    color: 'danger',
-                    message: "❌ *FAILURE* | Build #${env.BUILD_NUMBER} failed. Check Jenkins logs.",
-                    tokenCredentialId: SLACK_CRED_ID
+                    color: "danger",
+                    credentialsId: "${SLACK_CREDENTIALS_ID}",
+                    message: "❌ *FAILED*: Jenkins Build Failed! 🚨\n*Project:* Project04\n*Check Jenkins logs for errors.*"
                 )
+            }
+        }
+        always {
+            script {
+                echo "🧹 Removing all local Docker images..."
+                sh 'docker rmi -f $(docker images -aq) || echo "No images to remove."'
+                sh 'docker system prune -f'
             }
         }
     }
