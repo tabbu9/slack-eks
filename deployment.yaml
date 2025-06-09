@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project04-app
+  labels:
+    app: project04
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: project04
+  template:
+    metadata:
+      labels:
+        app: project04
+    spec:
+      containers:
+        - name: project04-container
+          image: tabbu93/project04:latest  # This will be updated dynamically
+          ports:
+            - containerPort: 80
