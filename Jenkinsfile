@@ -39,7 +39,7 @@ pipeline {
                     echo "New Docker Image Version: ${env.IMAGE_VERSION}"
  
                     withCredentials([string(credentialsId: DOCKER_CREDENTIALS_ID, variable: 'DOCKER_TOKEN')]) {
-                        sh 'echo "$DOCKER_TOKEN" | docker login -u "harishgorla5" --password-stdin'
+                        sh 'echo "$DOCKER_TOKEN" | docker login -u "tabbu93" --password-stdin'
                     }
  
                     sh 'docker pull nginx:latest'
