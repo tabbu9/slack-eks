@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: project4-deployment
+  name: project04-deployment
   labels:
-    app: project4
+    app: project04
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: project4
+      app: project04
   template:
     metadata:
       labels:
-        app: project4
+        app: project04
     spec:
       containers:
-      - name: project4
-        image: harishgorla5/project4:latest
+      - name: project04
+        image: tabbu93/project04:latest
         ports:
         - containerPort: 80
 
@@ -24,11 +24,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: project4-service
+  name: project04-service
 spec:
   type: LoadBalancer
   selector:
-    app: project4
+    app: project04
   ports:
     - protocol: TCP
       port: 80
