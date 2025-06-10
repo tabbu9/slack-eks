@@ -9,7 +9,7 @@ pipeline {
         GIT_BRANCH = 'main'
         AWS_REGION = 'us-east-1'
         SLACK_CREDENTIALS_ID = 'slack'
-        EKS_CLUSTER_NAME = 'batch071-eks'
+        EKS_CLUSTER_NAME = 'batch071-eksn'
     }
  
     stages {
